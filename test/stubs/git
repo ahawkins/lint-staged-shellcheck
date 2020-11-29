@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+main() {
+	if [ "${1:-}" = "ls-files" ] && [ "${2:-}" = "--ignored" ] && [ "${3:-}" = "-X" ]; then
+		comm -1 -2 \
+			<(sort -u "${4}") \
+			<(find . -type f | sed 's|./||g' | sort)
+	else
+		echo "Unknown stub: $*" 1>&2
+		return 1
+	fi
+}
+
+main "$@"
