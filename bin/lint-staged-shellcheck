@@ -1,118 +1,71 @@
-#!/usr/bin/env bash
+#!/usr/bin/env node
 
-set -eou pipefail
+const ignore = require("ignore");
+const minimist = require("minimist");
+const fs = require("fs");
+const path = require("path");
+const childProcess = require("child_process");
 
-log::header() {
-        echo '=>' "$@" 1>&2
+const shellcheckIgnore = ignore();
+
+if (fs.existsSync(".shellcheckignore")) {
+	shellcheckIgnore.add(fs.readFileSync(".shellcheckignore").toString());
 }
 
-log::indicator() {
-        echo '->' "$@" 1>&2
+const argv = minimist(process.argv.slice(2));
+
+const checkable = shellcheckIgnore.filter(
+	argv._.map((p) => path.relative(process.cwd(), p))
+);
+
+const files = [];
+
+function isExecutable(file) {
+	try {
+		fs.accessSync(file, fs.constants.X_OK);
+		return true;
+	} catch (error) {
+		if (error.code === "EACCES") {
+			return false;
+		} else {
+			throw error;
+		}
+	}
 }
 
-log::debug() {
-        if tput colors &>/dev/null; then
-                # XXX: Light gray color
-                echo -e "\033[1;30m-> $*\033[0m" 1>&2
-        else
-                echo '->' "$@" 1>&2
-        fi
+for (const file of checkable) {
+	if (file.match(/\.(bash|sh)$/)) {
+		files.push(file);
+		continue;
+	}
+
+	if (!isExecutable(file)) {
+		continue;
+	}
+
+	const contents = fs.readFileSync(file).toString();
+
+	if (contents.startsWith("!#")) {
+		continue;
+	}
+
+	const index = contents.indexOf("\n");
+	const shebang = index === -1 ? contents : contents.slice(0, index);
+
+	if (shebang.match(/bash|sh/)) {
+		files.push(file);
+	}
 }
 
-log::error() {
-        if tput colors &>/dev/null; then
-                # XXX: Red
-                echo -e "\033[31mERROR: $*\033[0m" 1>&2
-        else
-                echo "ERROR:" "$@" 1>&2
-        fi
+if (files.length === 0) {
+	console.log("No matched files");
+	process.exit(0);
 }
 
-log::warn() {
-        if tput colors &>/dev/null; then
-                # XXX: bright yellow
-                echo -e "\033[1;33m-> $*\033[0m" 1>&2
-        else
-                echo "->" "$@" 1>&2
-        fi
+const shellcheck = childProcess.spawnSync("shellcheck", files, {
+	stdio: "inherit",
+});
+
+if (shellcheck.status) {
+	process.exit(shellcheck.status);
 }
-
-log::success() {
-        if tput colors &>/dev/null; then
-                # XXX: green
-                echo -e "\033[32m-> $*\033[0m" 1>&2
-        else
-                echo "->" "$@" 1>&2
-        fi
-}
-
-log::exec_command() {
-        log::debug '$' "$@"
-        "$@"
-}
-
-main() {
-	env | sort
-	log::header 'Diagnostics'
-	log::exec_command shellcheck --version
-
-	log::header 'Generating Files'
-
-	local staged_files ignored_files ignore_file
-
-	staged_files="$(mktemp)"
-	ignored_files="$(mktemp)"
-	ignore_file="$(mktemp)"
-
-	# XXX: these files are tracked by git and should always be excluded
-	cat <<EOF >"${ignore_file}"
-.shellcheckignore
-.gitmodules
-.gitattributes
-EOF
-
-	if [ -f .shellcheckignore ]; then
-		cat .shellcheckignore >> "${ignore_file}"
-	fi
-
-	git ls-files --ignored -X "${ignore_file}" > "${ignored_files}"
-
-	if [ $# -eq 0 ]; then
-		comm -2 -3 \
-			<(git ls-files) \
-			"${ignored_files}" > "${staged_files}"
-	else
-		comm -2 -3 \
-			<(echo "$@" | tr ' ' '\n' | sort) \
-			"${ignored_files}" > "${staged_files}"
-	fi
-
-	# shellcheck disable=SC2034
-	local -a shellcheck_files
-
-	while read -r file; do
-		case "${file}" in
-		*.sh)
-			shellcheck_files+=("${file}")
-			;;
-		*)
-			if [ -x "${file}" ]; then
-				if head -n 1 "${file}" | grep -qF bash; then
-					shellcheck_files+=("${file}")
-				fi
-			fi
-			;;
-		esac
-	done < "${staged_files}"
-
-	set +u
-	if [ "${#shellcheck_files[@]}" -ne 0 ]; then
-		log::indicator "Running shellcheck"
-		log::exec_command shellcheck "${shellcheck_files[@]}"
-		log::success "OK"
-	else
-		log::indicator "No files found; skipping"
-	fi
-}
-
-main "$@"
