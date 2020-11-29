@@ -1,2 +1,6 @@
-yarn.lock
+*.bats
+.gitkeep
+.gitmodules
 .shellcheckignore
+test/vendor
+yarn.lock
