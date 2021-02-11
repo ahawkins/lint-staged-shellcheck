@@ -33,7 +33,16 @@ function isExecutable(file) {
 	}
 }
 
+function isDirectory(path) {
+	const stat = fs.lstatSync(path);
+	return stat.isDirectory();
+}
+
 for (const file of checkable) {
+	if (isDirectory(file)) {
+		continue;
+	}
+
 	if (file.match(/\.(bash|sh)$/)) {
 		files.push(file);
 		continue;

@@ -12,8 +12,22 @@ setup() {
 
 shellcheck_fixture() {
 	assert [ -d "${1}" ]
+	local -a files=()
+
 	pushd "${1}" > /dev/null
-	run lint-staged-shellcheck *
+
+	# XXX: simulate a glob in the current directory becauase
+	# bats does not treat * as a shell glob when used in the 
+	# run command.
+	while read file; do
+		if [ "${file}" != "." ]; then
+			files+=("${file}")
+		fi
+	done < <(find . -print | sed -E 's/^\.\///')
+
+	assert [ "${#files}" -gt 0 ]
+
+	run lint-staged-shellcheck "${files[@]}"
 	popd > /dev/null
 }
 
@@ -28,7 +42,7 @@ shellcheck_fixture() {
 }
 
 @test "supports .shellcheckignore file" {
-	run shellcheck/test/fixtures/shellcheckignore/*.sh
+	run shellcheck test/fixtures/shellcheckignore/*.sh
 	assert_failure
 
 	shellcheck_fixture test/fixtures/shellcheckignore
