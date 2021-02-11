@@ -1,6 +1,6 @@
 {
 	"name": "lint-staged-shellcheck",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Integrate shellcheck with lint-staged",
 	"main": "index.js",
 	"repository": "https://github.com/ahawkins/lint-staged-shellcheck",
@@ -28,5 +28,8 @@
 	"dependencies": {
 		"ignore": "^5.1.8",
 		"minimist": "^1.2.5"
+	},
+	"bin": {
+		"lint-staged-shellcheck": "bin/lint-staged-shellcheck"
 	}
 }
